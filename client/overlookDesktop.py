@@ -3,6 +3,8 @@ import sys
 import psutil
 import time
 from datetime import datetime
+import requests
+import json
 
 # 검사하고 싶은 기본 앱(따로 추가 가능)
 APPS = [
@@ -10,6 +12,19 @@ APPS = [
     "kakao.exe",
     "discord.exe"
 ]
+
+JOY_APPS = [
+
+]
+
+WORK_APPS = [
+
+]
+
+
+
+SERVER_URL = "http://localhost:8080/api/v1/game/log"
+
 
 
 running_instances = {}
@@ -31,16 +46,20 @@ class Outputview():
         sys.stdout.flush()
 
     @staticmethod
-    def display_app_stop(app_name, pid, start_time, end_time, duration):
-        formatted_start = start_time.strftime('%H:%M:%S')
+    def display_app_stop(app_name, pid, end_time):
         formatted_end = end_time.strftime('%H:%M:%S')
-
         print(f"\n [STOP] '{app_name}' (PID: {pid}) - 종료 시간: {formatted_end}")
-        print(f"   👉 총 사용 시간: {duration}")
-        # 서버로 전송할 데이터를 시각적으로 보여줍니다.
-        print(f"   [Data] 시작: {formatted_start}, 종료: {formatted_end}, 사용 시간(초): {duration.total_seconds()}")
         print("-" * 50)
         sys.stdout.flush()
+
+    @staticmethod
+    def failed_send(response):
+        print(f"   [Server] 전송 실패: HTTP {response.status_code}")
+
+    @staticmethod
+    def error_send(e):
+        print(f"   [Server] 전송 중 알 수 없는 오류 발생: {e}")
+
 
 
 
@@ -67,7 +86,7 @@ def get_running_apps():
 
     return current_process
 
-
+#현재 시작됬거나 끝난 함수들 찾기
 def track_running_apps():
     Outputview.display_start_message(APPS)
 
@@ -85,8 +104,10 @@ def track_running_apps():
 def check_start(current_snapshot):
     for pid, info in current_snapshot.items():
         if(pid not in running_instances):
-            #출력
-            Outputview.display_app_start(info['name'], pid, info['start_time'])
+            start_time = datetime.now()
+            #출력 및 서버로 보내기
+            Outputview.display_app_start(info['name'], pid, start_time)
+            send_server(pid, info['name'], "START", start_time)
             #추천 리스트에 등록
             running_instances[pid] = info
 
@@ -95,16 +116,30 @@ def check_stop(current_snapshot, pids_to_check):
     for pid in pids_to_check:
         if(pid not in current_snapshot):
             app_data = running_instances[pid]
-            #삭제된 내용의 정보들
             end_time = datetime.now()
-            start_time = app_data['start_time']
-            duration = end_time - start_time
-
-            Outputview.display_app_stop(app_data['name'], pid, start_time, end_time, duration)
-
+            # 출력 및 서버로 보내기
+            Outputview.display_app_stop(app_data['name'], pid, end_time)
+            send_server(pid, app_data['name'], "STOP", end_time)
+            # 추천 리스트에서 제거
             del running_instances[pid]
 
+#데이터를 서버로 전송하는 함수
+def send_server(pid, app_name, event_type, event_time):
 
+    event_time_tostr = event_time.isoformat()
+
+    data = {
+        'pid': pid,
+        'appName': app_name,
+        'event_type': event_type,
+        'event_time': event_time_tostr,
+    }
+    try:
+        response = requests.post(SERVER_URL, json=data, timeout=2)
+        if response.status_code != 200:
+            Outputview.failed_send(response)
+    except (requests.exceptions.RequestException, requests.exceptions.ConnectionError) as e:
+        Outputview.error_send(e)
 
 
 if __name__ == "__main__":
