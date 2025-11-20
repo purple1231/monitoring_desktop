@@ -3,10 +3,8 @@ package com.example.overlookdesktopserver.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.time.LocalDate;
 
 @Entity
 @Getter
@@ -16,13 +14,14 @@ public class AppSession {
     public AppSession() {
     }
 
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long id; // DB Primary Key
 
-    private Long pid;
+    private Long pid; // 프로세스 ID (세션의 고유 식별자)
     private String appName;
     private LocalDateTime startTime;
-    private Long durationSeconds; // STOP 시 여기에 사용 시간이 기록됨
-    private LocalDate usageDate; // 통계 조회를 위한 날짜
+    private LocalDateTime endTime;
+    private Long durationSeconds; // NULL이면 활성, 값이 있으면 종료됨.
 }

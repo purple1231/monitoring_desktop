@@ -5,7 +5,7 @@ public class AppUsageRequest {
 
     private long pid;
     private String appName;
-    private String eventTyppe;
+    private String eventType;
     private LocalDateTime eventTime;
 
 
@@ -30,12 +30,12 @@ public class AppUsageRequest {
         this.appName = appName;
     }
 
-    public String getEventTyppe() {
-        return eventTyppe;
+    public String getEventType() {
+        return eventType;
     }
 
-    public void setEventTyppe(String eventTyppe) {
-        this.eventTyppe = eventTyppe;
+    public void setEventType(String eventTyppe) {
+        this.eventType = eventTyppe;
     }
 
     public LocalDateTime getEventTime() {
