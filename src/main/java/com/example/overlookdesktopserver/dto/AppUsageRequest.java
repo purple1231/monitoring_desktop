@@ -7,7 +7,7 @@ public class AppUsageRequest {
     private String appName;
     private String eventType;
     private LocalDateTime eventTime;
-
+    private String appCategory;
 
     public AppUsageRequest() {
 
@@ -44,5 +44,13 @@ public class AppUsageRequest {
 
     public void setEventTime(LocalDateTime eventTime) {
         this.eventTime = eventTime;
+    }
+
+    public String getAppCategory() {
+        return appCategory;
+    }
+
+    public void setAppCategory(String appCategory) {
+        this.appCategory = appCategory;
     }
 }
