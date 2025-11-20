@@ -21,6 +21,7 @@ public class AppSession {
 
     private Long pid; // 프로세스 ID (세션의 고유 식별자)
     private String appName;
+    private String appCategory;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private Long durationSeconds; // NULL이면 활성, 값이 있으면 종료됨.
