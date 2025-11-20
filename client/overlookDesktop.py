@@ -6,22 +6,28 @@ from datetime import datetime
 import requests
 import json
 
-# 검사하고 싶은 기본 앱(따로 추가 가능)
-APPS = [
+CODE_APPS = [
+    "code.exe",  # VS Code 예시
+    "pycharm64.exe"
+]
+
+GAME_APPS = [
+    "leagueoflegends.exe",
+    "steam.exe"
+]
+
+MUSIC_APPS = [
+    "spotify.exe",
+    "youtubemusic.exe"
+]
+
+PRODUCT_APPS = [
     "chrome.exe",
     "kakao.exe",
-    "discord.exe"
+    "powerpnt.exe" # PPT 예시
 ]
 
-JOY_APPS = [
-
-]
-
-WORK_APPS = [
-
-]
-
-
+ALL_APPS = list(set(CODE_APPS + GAME_APPS + MUSIC_APPS + PRODUCT_APPS))
 
 SERVER_URL = "http://localhost:8080/api/v1/game/log"
 
@@ -61,6 +67,20 @@ class Outputview():
         print(f"   [Server] 전송 중 알 수 없는 오류 발생: {e}")
 
 
+def get_app_category(app_name):
+    app_name_lower = app_name.lower()
+
+    # 각 리스트를 체크하여 카테고리 반환.
+    if app_name_lower in [app.lower() for app in CODE_APPS]:
+        return "CODE"
+    elif app_name_lower in [app.lower() for app in GAME_APPS]:
+        return "GAME"
+    elif app_name_lower in [app.lower() for app in MUSIC_APPS]:
+        return "MUSIC"
+    elif app_name_lower in [app.lower() for app in PRODUCT_APPS]:
+        return "PRODUCT"
+    else:
+        return "UNKNOWN"
 
 
 # 현재 실행 중인 모든 프로세스 스캔(APPS안에 있는것들만)
@@ -76,7 +96,7 @@ def get_running_apps():
             p_name = p_info['name']
 
             # 프로세스 이름이 감시 대상 목록에 있는지 확인
-            if p_name and p_name.lower() in [app.lower() for app in APPS]:
+            if get_app_category(p_name) != "UNKNOWN":
                 current_process[p_info['pid']] = {
                     'name': p_name,
                     # create_time은 timestamp 임. datetime 객체로 변환
@@ -88,7 +108,7 @@ def get_running_apps():
 
 #현재 시작됬거나 끝난 함수들 찾기
 def track_running_apps():
-    Outputview.display_start_message(APPS)
+    Outputview.display_start_message(ALL_APPS)
 
     while True:
         # 1. 현재 순간 실행 중인 타겟 프로세스들을 가져옴
@@ -127,12 +147,14 @@ def check_stop(current_snapshot, pids_to_check):
 def send_server(pid, app_name, event_type, event_time):
 
     event_time_tostr = event_time.isoformat()
+    app_category = get_app_category(app_name)
 
     data = {
         'pid': pid,
         'appName': app_name,
         'event_type': event_type,
         'event_time': event_time_tostr,
+        'appCategory': app_category,
     }
     try:
         response = requests.post(SERVER_URL, json=data, timeout=2)
