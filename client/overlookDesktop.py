@@ -63,6 +63,10 @@ class Outputview():
         print(f"   [Server] 전송 실패: HTTP {response.status_code}")
 
     @staticmethod
+    def succeed_send(response):
+        print(f"   [Server] 전송 성공: HTTP {response.status_code}")
+
+    @staticmethod
     def error_send(e):
         print(f"   [Server] 전송 중 알 수 없는 오류 발생: {e}")
 
@@ -152,14 +156,14 @@ def send_server(pid, app_name, event_type, event_time):
     data = {
         'pid': pid,
         'appName': app_name,
-        'event_type': event_type,
-        'event_time': event_time_tostr,
+        'eventType': event_type,
+        'eventTime': event_time_tostr,
         'appCategory': app_category,
     }
     try:
         response = requests.post(SERVER_URL, json=data, timeout=2)
-        if response.status_code != 200:
-            Outputview.failed_send(response)
+        if response.status_code >= 200 and response.status_code < 300:
+            Outputview.succeed_send(response)
     except (requests.exceptions.RequestException, requests.exceptions.ConnectionError) as e:
         Outputview.error_send(e)
 
