@@ -2,19 +2,83 @@ package com.example.overlookdesktopserver.service;
 
 import com.example.overlookdesktopserver.entity.AppSession;
 import com.example.overlookdesktopserver.repository.AppSessionRepository;
+import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+
+
+@Service
 public class AppLoadService {
 
     private final AppSessionRepository appSessionRepository;
 
     public AppLoadService(AppSessionRepository appSessionRepository){
         this.appSessionRepository = appSessionRepository;
+    }
+
+
+    //모든 앱별 시간을 로드
+    public Map<String, Long> getAggregatedUsageStats(){
+        //모든 세션 데이터
+        List<AppSession> allSessions = appSessionRepository.findAll();
+        //앱 이름별로 세션들을 나눠서 map에 저장
+        Map<String, List<AppSession>> sessionsByApp = allSessions.stream()
+                .collect(Collectors.groupingBy(AppSession::getAppName));
+
+        Map<String, Long> allApps = new HashMap<>();
+        //각 앱별로 중첩 제거 실행
+        sessionsByApp.forEach((appName, sessions) -> {
+            long totalMergedDuration = mergeAndCalculate(sessions);
+            allApps.put(appName, totalMergedDuration);
+        });
+
+        return allApps;
+    }
+
+    //특정 앱별 시간을 로드
+    public Map<String, Long> getFilteredAppStats(List<String> targetApps) {
+        // 모든 앱의 단순 합산 통계를 가져옴.
+        Map<String, Long> allStats = getAggregatedUsageStats();
+        Map<String, Long> filteredStats = new HashMap<>();
+        //모든 키 이름을 lower로
+        Map<String, Long> lowerKeyMap = new HashMap<>();
+        allStats.forEach((name, value) -> {
+            lowerKeyMap.put(name.toLowerCase(), value);
+        });
+
+        for (String appName : targetApps) {
+            String lower = appName.toLowerCase();
+            if (lowerKeyMap.containsKey(lower)) {
+                //필터링해서 일치하는 것만 넣기
+                filteredStats.put(appName, lowerKeyMap.get(lower));
+            }
+        }
+        return filteredStats;
+    }
+
+    //모든 카테고리별 앱 시간을 로드
+    public Map<String, Long> getMergedCategoryStats() {
+        List<AppSession> allSessions = appSessionRepository.findAll();
+
+        // AppCategory를 기준으로 그룹화
+        Map<String, List<AppSession>> sessionsByCategory = allSessions.stream()
+                .collect(Collectors.groupingBy(AppSession::getAppCategory));
+
+        Map<String, Long> categoryUsage = new HashMap<>();
+
+        // 각 카테고리 그룹별로 mergeAndCalculate 실행
+        sessionsByCategory.forEach((category, sessions) -> {
+            long totalMergedDuration = mergeAndCalculate(sessions);
+            categoryUsage.put(category, totalMergedDuration);
+        });
+        return categoryUsage;
     }
 
 
@@ -67,11 +131,10 @@ public class AppLoadService {
 
             //현재까지 병합된 구간의 총 시간을 계산하여 누적
             totalDurationSeconds += Duration.between(currentMerged.start, currentMerged.end).getSeconds();
-            currentMerged = next;
+
         }
         //마지막으로 남아있는 구간의 시간을 합산
         totalDurationSeconds += Duration.between(currentMerged.start, currentMerged.end).getSeconds();
-
         return totalDurationSeconds;
     }
 
@@ -96,8 +159,5 @@ public class AppLoadService {
         return session.getEndTime();
 
     }
-
-
-
 
 }
