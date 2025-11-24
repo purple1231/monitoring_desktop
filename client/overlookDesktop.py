@@ -110,11 +110,6 @@ class Outputview():
         print(f"           결과: {result}")
 
     @staticmethod
-    def display_command_log(command, result):
-        print(f"\n [Command] 수신: {command}")
-        print(f"           결과: {result}")
-
-    @staticmethod
     def succeed_category_send(app_name, category, response):
         print(f"   [Category/Server] '{app_name}' 전송 성공: HTTP {response.status_code}")
 
@@ -244,44 +239,32 @@ def add_category(app_name, category):
 
 
 # 서버로 카테고리 추가 정보를 전송하는 함수
-def send_category_to_server(app_name, category):
-    data = {
-        'appName': app_name,
-        'categoryName': category,
-    }
-    try:
-        # 서버로 POST 요청 전송
-        response = requests.post(SERVER_CATEGORY_URL, json=data, timeout=5)
+@app.route("/api/v1/game/category", methods=["GET"])
+def get_all_category_info():
+    return jsonify(APP_CATEGORIES), 200
 
-        if (200 <= response.status_code < 300):
-            Outputview.succeed_category_send(app_name, category, response)
-            return True, None
-
-        Outputview.failed_category_send(app_name, category, response)
-        return False, f"Server Error: {response.status_code}"
-
-    except (requests.exceptions.RequestException, requests.exceptions.ConnectionError) as e:
-        Outputview.error_category_send(e)
-        return False, str(e)
-
-
-@app.route("/execute", methods=["POST"])
-def execute_command():
+# 서버가 카테고리 추가하는 함수
+@app.route("/api/v1/game/category", methods=["POST"])
+def add_category_from_spring():
     data = request.get_json()
-    command = data.get("command")
+    app_name = data.get("appName")
+    category = data.get("categoryName")
 
-    if command:
-        # 여기서 실제 명령 실행 로직 호출
-        message, success = run_executor([command])
+    #파라미터 체크
+    if not app_name or not category:
+        return jsonify({"message": "appName, categoryName 둘 다 필요합니다."}), 400
+    #카테고리 존재 여부 확인
+    category_upper = category.upper()
+    if category_upper not in APP_CATEGORIES:
+        return jsonify({"message": f"존재하지 않는 카테고리: {category}"}), 400
 
-        Outputview.display_command_log(command, message)
+    #추가 로직
+    success, error = add_category(app_name, category_upper)
 
-        if success:
-            return jsonify({"message": message, "status": "SUCCESS"}), 200
-        else:
-            return jsonify({"message": message, "status": "ERROR"}), 500
+    if not success:
+        return jsonify({"message": error or f"{category}에 이미 {app_name}이(가) 있습니다."}), 400
+    return jsonify({"message": f"{app_name}을(를) {category_upper} 카테고리에 추가했습니다."}), 201
 
-    return jsonify({"message": "실행할 'command'가 없습니다."}), 400
 
 def run_executor(commands):
     try:
