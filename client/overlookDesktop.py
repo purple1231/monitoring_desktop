@@ -5,31 +5,61 @@ import time
 from datetime import datetime
 import requests
 import json
+import threading
+import subprocess
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
 
 CODE_APPS = [
-    "code.exe",  # VS Code 예시
-    "pycharm64.exe"
+    "code.exe",      # VS Code 예시
+    "pycharm64.exe",
+    "idea64.exe",
+    "eclipse.exe",
+    "cmd.exe",
+    "powershell.exe"
 ]
 
 GAME_APPS = [
     "leagueoflegends.exe",
-    "steam.exe"
+    "steam.exe",
+    "Battle.net.exe",
+    "Origin.exe",
+    "EpicGamesLauncher.exe",
+
 ]
 
 MUSIC_APPS = [
     "spotify.exe",
-    "youtubemusic.exe"
+    "youtubemusic.exe",
+    "iTunes.exe",
+    "foobar2000.exe",
+    "melon.exe"
 ]
 
 PRODUCT_APPS = [
     "chrome.exe",
     "kakao.exe",
-    "powerpnt.exe" # PPT 예시
+    "powerpnt.exe",
+    "EXCEL.EXE",
+    "WINWORD.EXE",
+    "Notion.exe",
+    "Discord.exe",
+    "slack.exe"
 ]
+
+APP_CATEGORIES = {
+    "CODE": CODE_APPS,
+    "GAME": GAME_APPS,
+    "MUSIC": MUSIC_APPS,
+    "PRODUCT": PRODUCT_APPS
+}
 
 ALL_APPS = list(set(CODE_APPS + GAME_APPS + MUSIC_APPS + PRODUCT_APPS))
 
 SERVER_URL = "http://localhost:8080/api/v1/game/log"
+
+SERVER_CATEGORY_URL = "http://localhost:8080/api/v1/game/category"
 
 
 
@@ -70,6 +100,31 @@ class Outputview():
     def error_send(e):
         print(f"   [Server] 전송 중 알 수 없는 오류 발생: {e}")
 
+    @staticmethod
+    def failed_add_category(app_name):
+        print(f"   앱 넣기 실패: {app_name}")
+
+    @staticmethod
+    def display_command_log(command, result):
+        print(f"\n [Command] 수신: {command}")
+        print(f"           결과: {result}")
+
+    @staticmethod
+    def display_command_log(command, result):
+        print(f"\n [Command] 수신: {command}")
+        print(f"           결과: {result}")
+
+    @staticmethod
+    def succeed_category_send(app_name, category, response):
+        print(f"   [Category/Server] '{app_name}' 전송 성공: HTTP {response.status_code}")
+
+    @staticmethod
+    def failed_category_send(app_name, category, response):
+        print(f"   [Category/Server] '{app_name}' 전송 실패: HTTP {response.status_code}")
+
+    @staticmethod
+    def error_category_send(e):
+        print(f"   [Category/Server] 전송 중 알 수 없는 오류 발생: {e}")
 
 def get_app_category(app_name):
     app_name_lower = app_name.lower()
@@ -168,8 +223,92 @@ def send_server(pid, app_name, event_type, event_time):
         Outputview.error_send(e)
 
 
+
+#카테고리 전체 이름을 로드하는 함수
+def get_all_categories():
+    return list(APP_CATEGORIES.keys())
+
+def add_category(app_name, category):
+    global ALL_APPS
+
+    target_list = APP_CATEGORIES[category.upper()]
+    # 이미 카테고리에 있을 때
+    if app_name in target_list:
+        Outputview.failed_send(category)
+        return False
+
+    target_list.append(app_name)
+    ALL_APPS = list(set(ALL_APPS + [app_name]))
+
+    return True, None
+
+
+# 서버로 카테고리 추가 정보를 전송하는 함수
+def send_category_to_server(app_name, category):
+    data = {
+        'appName': app_name,
+        'categoryName': category,
+    }
+    try:
+        # 서버로 POST 요청 전송
+        response = requests.post(SERVER_CATEGORY_URL, json=data, timeout=5)
+
+        if (200 <= response.status_code < 300):
+            Outputview.succeed_category_send(app_name, category, response)
+            return True, None
+
+        Outputview.failed_category_send(app_name, category, response)
+        return False, f"Server Error: {response.status_code}"
+
+    except (requests.exceptions.RequestException, requests.exceptions.ConnectionError) as e:
+        Outputview.error_category_send(e)
+        return False, str(e)
+
+
+@app.route("/execute", methods=["POST"])
+def execute_command():
+    data = request.get_json()
+    command = data.get("command")
+
+    if command:
+        # 여기서 실제 명령 실행 로직 호출
+        message, success = run_executor([command])
+
+        Outputview.display_command_log(command, message)
+
+        if success:
+            return jsonify({"message": message, "status": "SUCCESS"}), 200
+        else:
+            return jsonify({"message": message, "status": "ERROR"}), 500
+
+    return jsonify({"message": "실행할 'command'가 없습니다."}), 400
+
+def run_executor(commands):
+    try:
+        cmd = commands[0]
+        subprocess.Popen(cmd, shell=True)
+        return f"명령어 '{cmd}' 실행 시작됨", True
+    except Exception as e:
+        return f"실행 중 오류 발생: {str(e)}", False
+
+# Flask와는 별도의 스레드로 운영
+def monitor_loop():
+    Outputview.display_start_message(ALL_APPS)
+    while True:
+        current_snapshot = get_running_apps()
+        check_start(current_snapshot)
+        pids_to_check = list(running_instances.keys())
+        check_stop(current_snapshot, pids_to_check)
+
+        time.sleep(1)
+
 if __name__ == "__main__":
     try:
-        track_running_apps()
+        # 1. 감시 루프를 별도 스레드(데몬)로 실행 -> 백그라운드에서 계속 돔
+        monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+        monitor_thread.start()
+        # 2. 메인 스레드는 Flask 서버 실행 -> 요청을 기다림 (Blocking)
+        app.run(host="0.0.0.0", port=5000)
+
     except KeyboardInterrupt:
         print("종료.")
